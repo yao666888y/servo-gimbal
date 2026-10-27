@@ -1,0 +1,53 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "视觉跟踪：真实摄像头 (cam1)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/vision_tracker.py",
+      "args": ["--port", "COM7", "--cam", "1", "--mode", "color"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "python": "D:\\anaconda3\\envs\\vision_servo\\python.exe",
+      "env": { "PYTHONIOENCODING": "utf-8" },
+      "justMyCode": true
+    },
+    {
+      "name": "视觉跟踪：真实摄像头 (cam0)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/vision_tracker.py",
+      "args": ["--port", "COM7", "--cam", "0", "--mode", "color"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "python": "D:\\anaconda3\\envs\\vision_servo\\python.exe",
+      "env": { "PYTHONIOENCODING": "utf-8" },
+      "justMyCode": true
+    },
+    {
+      "name": "视觉跟踪：虚拟目标 (sim, 不需要摄像头)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/vision_tracker.py",
+      "args": ["--port", "COM7", "--mode", "sim"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "python": "D:\\anaconda3\\envs\\vision_servo\\python.exe",
+      "env": { "PYTHONIOENCODING": "utf-8" },
+      "justMyCode": true
+    },
+    {
+      "name": "视觉跟踪：列出摄像头",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/vision_tracker.py",
+      "args": ["--list"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "python": "D:\\anaconda3\\envs\\vision_servo\\python.exe",
+      "env": { "PYTHONIOENCODING": "utf-8" },
+      "justMyCode": true
+    }
+  ]
+}

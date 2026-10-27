@@ -1,3 +1,10 @@
 {
-    "cmake.sourceDirectory": "G:/servo-gimbal/firmware"
+    "cmake.sourceDirectory": "G:/servo-gimbal/firmware",
+    "python.defaultInterpreterPath": "D:\\anaconda3\\envs\\vision_servo\\python.exe",
+    "python.terminal.activateEnvironment": false,
+    "files.encoding": "utf8",
+    "files.associations": {
+        "*.h": "c",
+        "*.ioc": "ini"
+    }
 }

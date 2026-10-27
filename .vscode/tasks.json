@@ -66,6 +66,30 @@
       "command": "D:/CLT/STM32CubeCLT_1.18.0/STM32CubeProgrammer/bin/STM32_Programmer_CLI.exe",
       "args": ["-l"],
       "problemMatcher": []
+    },
+    {
+      "label": "Vision: 列出摄像头",
+      "type": "shell",
+      "command": "D:/anaconda3/envs/vision_servo/python.exe",
+      "args": ["tools/vision_tracker.py", "--list"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Vision: 颜色跟踪 (cam1)",
+      "type": "shell",
+      "command": "D:/anaconda3/envs/vision_servo/python.exe",
+      "args": ["tools/vision_tracker.py", "--port", "COM7", "--cam", "1", "--mode", "color"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Vision: 虚拟目标 (sim)",
+      "type": "shell",
+      "command": "D:/anaconda3/envs/vision_servo/python.exe",
+      "args": ["tools/vision_tracker.py", "--port", "COM7", "--mode", "sim"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
     }
   ]
 }
