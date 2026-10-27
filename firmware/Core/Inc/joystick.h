@@ -27,10 +27,22 @@ extern "C" {
 
 /* 摇杆中位（12bit ADC） */
 #define JOY_ADC_CENTER   2048
+
+/* 舵机输出通道选择：
+ *   1 = PCA9685（I2C2，舵机保持接在驱动板上不动）—— 默认
+ *   0 = TIM2 直驱（PA0/PA1），需要把舵机信号线改接到 MCU
+ */
+#define SERVO_DRV_PCA9685  1
+
 /* 死区：|控制量| < 10 视为 0，抑制中位抖动 */
 #define JOY_DEADBAND     10
 /* 满量程控制量 */
 #define JOY_FULL_SCALE   100
+
+/* 上电自检：ADC 值必须落在这个区间才认为摇杆接上了
+   （H7 模拟输入悬空一般读到 100~300，会被判为"未接"，从而锁在中位） */
+#define JOY_RAW_MIN      500
+#define JOY_RAW_MAX      3600
 
 /* 方向反转开关：装好后发现方向相反就改这里 */
 #define JOY_X_INVERT     0

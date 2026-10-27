@@ -5,7 +5,22 @@
   ******************************************************************************
   */
 #include "joystick.h"
-#include "bsp_pwm.h"
+
+#if (SERVO_DRV_PCA9685 != 0)
+  #include "bsp_servo.h"     /* PCA9685（I2C2），舵机保持接在驱动板上 */
+#else
+  #include "bsp_pwm.h"       /* TIM2 直驱 PA0/PA1 */
+#endif
+
+#define JOY_PAN_CH    0U
+#define JOY_TILT_CH   1U
+
+/* 统一出口：两种驱动都是 500~2500us */
+#if (SERVO_DRV_PCA9685 != 0)
+  #define SERVO_WRITE(ch, us)  (void)BSP_Servo_SetPulseUs((ch), (us))
+#else
+  #define SERVO_WRITE(ch, us)  (void)BSP_PWM_SetPulseUs((ch), (us))
+#endif
 
 /* ---------------------------------------------------------------------------
  * DMA 缓冲区必须放在 AXI SRAM（0x2400_0000）：
@@ -17,6 +32,8 @@ static volatile uint16_t s_adc_dma[2];
 
 static uint8_t s_started = 0U;
 static uint8_t s_sw_last = 1U;
+static uint8_t s_joy_valid = 0U;           /* 上电后检测到摇杆才置 1 */
+static uint16_t s_last_us[2] = {0U, 0U};   /* 上次写出的脉宽，避免重复写 */
 
 /* 一阶低通状态 */
 static float s_fx = 0.0f;
@@ -38,6 +55,8 @@ void Joystick_Init(void)
   g_stick_y = 0;
   g_joy_key = 0U;
   s_sw_last = 1U;
+  s_last_us[0] = 0U;   /* 清缓存，保证第一帧一定写出 */
+  s_last_us[1] = 0U;
 
   /* 连续转换 + 循环 DMA：转换结果一直刷新 s_adc_dma[] */
   s_started = (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)s_adc_dma, 2U) == HAL_OK) ? 1U : 0U;
@@ -69,6 +88,27 @@ void joystick_read(void)
 
   g_joy_raw[0] = s_adc_dma[0];
   g_joy_raw[1] = s_adc_dma[1];
+
+  /* ---- 上电保护：检测不到摇杆就锁中位 -------------------------------
+     模拟输入悬空时 H7 一般读到 100~300，如果直接当满行程用，
+     一上电舵机就会打到 0°/180° 撞限位。这里要求两个通道都落在
+     合理区间才解锁，之后全行程（含 0/4095）都可以正常使用。 */
+  if (s_joy_valid == 0U)
+  {
+    if ((g_joy_raw[0] > JOY_RAW_MIN) && (g_joy_raw[0] < JOY_RAW_MAX) &&
+        (g_joy_raw[1] > JOY_RAW_MIN) && (g_joy_raw[1] < JOY_RAW_MAX))
+    {
+      s_joy_valid = 1U;
+    }
+    else
+    {
+      s_fx = 0.0f;
+      s_fy = 0.0f;
+      g_stick_x = 0;
+      g_stick_y = 0;
+      return;     /* 摇杆未接：保持中位 */
+    }
+  }
 
   rx = raw_to_stick(g_joy_raw[0]);
   ry = raw_to_stick(g_joy_raw[1]);
@@ -111,10 +151,30 @@ void key_scan(void)
 }
 
 /* -------------------------------------------------------------------------- */
+/* 角度 0~180° -> 脉宽 500~2500us（两种驱动共用） */
+static uint16_t angle_to_pulse(float deg)
+{
+  if (deg < 0.0f)   deg = 0.0f;
+  if (deg > 180.0f) deg = 180.0f;
+  return (uint16_t)(500.0f + deg * (2000.0f / 180.0f) + 0.5f);
+}
+
+/* 值没变就不重复写（PCA9685 走 I2C，减少总线占用） */
+static void servo_apply(uint8_t ch, uint16_t pulse_us)
+{
+  if (pulse_us != s_last_us[ch])
+  {
+    SERVO_WRITE(ch, pulse_us);
+    s_last_us[ch] = pulse_us;
+  }
+}
+
 void servo_control(void)
 {
-  float pan_deg;
-  float tilt_deg;
+  float    pan_deg;
+  float    tilt_deg;
+  uint16_t us_pan;
+  uint16_t us_tilt;
 
   /* 按下摇杆帽：立即回中 */
   if (g_joy_key != 0U)
@@ -124,14 +184,14 @@ void servo_control(void)
     s_fy = 0.0f;
     g_stick_x = 0;
     g_stick_y = 0;
-    BSP_PWM_SetAngle(SERVO_PAN,  SERVO_ANGLE_MID_DEG);
-    BSP_PWM_SetAngle(SERVO_TILT, SERVO_ANGLE_MID_DEG);
+    servo_apply(JOY_PAN_CH,  angle_to_pulse(90.0f));
+    servo_apply(JOY_TILT_CH, angle_to_pulse(90.0f));
     return;
   }
 
   /* 控制量(-100~100) -> 角度(0~180, 90 为中位) */
-  pan_deg  = SERVO_ANGLE_MID_DEG + (float)g_stick_x * (SERVO_ANGLE_MID_DEG / 100.0f);
-  tilt_deg = SERVO_ANGLE_MID_DEG + (float)g_stick_y * (SERVO_ANGLE_MID_DEG / 100.0f);
+  pan_deg  = 90.0f + (float)g_stick_x * 0.9f;
+  tilt_deg = 90.0f + (float)g_stick_y * 0.9f;
 
   /* ----------------------------------------------------------------------
    * 【摄像头到货后的升级点】
@@ -143,6 +203,9 @@ void servo_control(void)
    * 注意 PID 输出同样要限幅到 ±100，然后本函数照常换算角度。
    * 舵机接口、限位、脉宽换算都不用动。
    * -------------------------------------------------------------------- */
-  BSP_PWM_SetAngle(SERVO_PAN,  pan_deg);
-  BSP_PWM_SetAngle(SERVO_TILT, tilt_deg);
+  us_pan  = angle_to_pulse(pan_deg);
+  us_tilt = angle_to_pulse(tilt_deg);
+
+  servo_apply(JOY_PAN_CH,  us_pan);
+  servo_apply(JOY_TILT_CH, us_tilt);
 }

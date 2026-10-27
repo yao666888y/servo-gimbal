@@ -99,6 +99,31 @@ CRC16 = CCITT-FALSE (poly 0x1021, init 0xFFFF)，覆盖 LEN、CMD、PAYLOAD
 
 > 详细接线见 [docs/Wiring_PCA9685.md](../docs/Wiring_PCA9685.md)。
 
+## 7.5 摇杆手动控制（当前运行模式）
+
+舵机**保持接在 PCA9685 上不动**，只把摇杆接到 H7：
+
+| 摇杆模块 | 接到 | 说明 |
+|---|---|---|
+| VCC | 3.3V | 几 mA，可以带 |
+| GND | GND | |
+| **URX** | **PA2** | ADC1_INP14 |
+| **URY** | **PA3** | ADC1_INP15 |
+| **SW** | **PB1** | 内部上拉，不用外接电阻 |
+
+控制链路：`ADC(DMA) → -100~100 → 死区±10 → 一阶滤波 → 角度0~180 → 脉宽 → PCA9685`
+
+参数都在 [Core/Inc/joystick.h](Core/Inc/joystick.h)：`JOY_DEADBAND`、`JOY_X_INVERT`、`JOY_Y_INVERT`、`SERVO_DRV_PCA9685`。
+
+两个保护：
+
+1. **上电保护**：ADC 值不在 `[500, 3600]` 内视为摇杆未接，锁中位 1500µs，避免悬空被当满行程、舵机撞限位
+2. **限位**：角度硬限制 0~180°，对应脉宽 500~2500µs
+
+切换输出方式：`joystick.h` 里 `SERVO_DRV_PCA9685`
+- `1`（默认）= PCA9685（I2C2），舵机接线不用动
+- `0` = TIM2 直驱，舵机信号要改接 PA0/PA1
+
 ## 8.5 已踩过的坑（重要）
 
 | 现象 | 根因 | 修复 |

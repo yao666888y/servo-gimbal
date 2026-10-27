@@ -34,18 +34,23 @@ static void MX_GPIO_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM6_Init(void);
+#if (SERVO_DRV_PCA9685 == 0)
 static void MX_TIM2_Init(void);
+#endif
 static void MX_ADC1_Init(void);
 
 /**
   * @brief  摇杆手动控制演示
   *
-  * 硬件接线：
-  *   舵机 Pan  信号 -> PA0 (TIM2_CH1)    舵机电源 -> 独立 6~7.4V，GND 共地
-  *   舵机 Tilt 信号 -> PA1 (TIM2_CH2)
+  * 硬件接线（默认：舵机保持接在 PCA9685 驱动板上）：
+  *   舵机 Pan/Tilt -> PCA9685 CH0/CH1（原有接线不动）
+  *   I2C2: PB10=SCL  PB11=SDA  PD6=OE（原有接线不动）
   *   摇杆 URX -> PA2 (ADC1_INP14)        摇杆 VCC -> 3.3V
   *   摇杆 URY -> PA3 (ADC1_INP15)        摇杆 GND -> GND
   *   摇杆 SW  -> PB1 (内部上拉，按下为低)
+  *
+  * 若改用 TIM2 直驱，把 joystick.h 的 SERVO_DRV_PCA9685 改成 0，
+  * 并把舵机信号线改接到 PA0(TIM2_CH1) / PA1(TIM2_CH2)。
   *
   * 控制链路（50Hz）：
   *   ADC DMA -> joystick_read() 映射/死区/滤波 -> key_scan() -> servo_control()
@@ -67,15 +72,22 @@ int main(void)
   SystemClock_Config();
 
   MX_GPIO_Init();          /* LED / SW 按键 / PCA9685 OE */
-  MX_TIM2_Init();          /* PA0/PA1 50Hz PWM */
   MX_ADC1_Init();          /* PA2/PA3 双通道 + DMA */
 
   /* 串口保留：需要调试输出时可以直接用 huart1 */
   MX_USART1_UART_Init();
-  MX_I2C2_Init();          /* 保留：PCA9685 路径，当前不使用 */
   MX_TIM6_Init();          /* 保留：50Hz 节拍源，这里不启动（主循环用 SysTick） */
 
+#if (SERVO_DRV_PCA9685 != 0)
+  /* 舵机接在 PCA9685 驱动板上：原有接线完全不用动 */
+  MX_I2C2_Init();
+  (void)BSP_Servo_Init();  /* 写寄存器并把 OE 拉低使能输出 */
+#else
+  /* TIM2 直驱：舵机信号线需改接到 PA0/PA1 */
+  MX_TIM2_Init();
   BSP_PWM_Init();          /* 两路先输出 1500us 中位 */
+#endif
+
   Joystick_Init();         /* 启动 ADC 连续转换 + 循环 DMA */
 
   last_ctrl = HAL_GetTick();
@@ -270,6 +282,7 @@ static void MX_TIM6_Init(void)
 }
 
 /* -------------------------------------------------------------------------- */
+#if (SERVO_DRV_PCA9685 == 0)
 /* TIM2 CH1/CH2：50Hz 舵机 PWM
    TIM2 内核 240MHz -> PSC=239 得 1MHz（1 计数 = 1us）
    ARR=19999 -> 20ms；CCR 500~2500 -> 0.5~2.5ms */
@@ -302,6 +315,7 @@ static void MX_TIM2_Init(void)
     Error_Handler();
   }
 }
+#endif /* SERVO_DRV_PCA9685 == 0 */
 
 /* -------------------------------------------------------------------------- */
 /* ADC1 双通道扫描 + 循环 DMA：PA2(INP14)=URX，PA3(INP15)=URY */
