@@ -26,4 +26,20 @@ static inline uint16_t servo_angle_to_pulse(float deg)
   return (uint16_t)(500.0f + deg * (2000.0f / 180.0f) + 0.5f);
 }
 
+/* 由「中位 + 单边行程」算出对称的实际限位。
+   单边行程会被限制为 min(half, center, 180-center)，
+   保证左右对称且永远落在舵机 0~180° 范围内。 */
+static inline void servo_calc_limit(float center, float half,
+                                    float *lo, float *hi)
+{
+  float h = half;
+
+  if (h < 0.0f) h = 0.0f;
+  if (h > center)          h = center;          /* 不能往小角度方向超 */
+  if (h > (180.0f - center)) h = 180.0f - center; /* 不能往大角度方向超 */
+
+  *lo = center - h;
+  *hi = center + h;
+}
+
 #endif /* __SERVO_OUT_H */

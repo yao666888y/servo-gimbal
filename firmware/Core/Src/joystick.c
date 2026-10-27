@@ -5,22 +5,10 @@
   ******************************************************************************
   */
 #include "joystick.h"
-
-#if (SERVO_DRV_PCA9685 != 0)
-  #include "bsp_servo.h"     /* PCA9685（I2C2），舵机保持接在驱动板上 */
-#else
-  #include "bsp_pwm.h"       /* TIM2 直驱 PA0/PA1 */
-#endif
+#include "servo_out.h"     /* 统一舵机出口 + servo_calc_limit + 角度/脉宽换算 */
 
 #define JOY_PAN_CH    0U
 #define JOY_TILT_CH   1U
-
-/* 统一出口：两种驱动都是 500~2500us */
-#if (SERVO_DRV_PCA9685 != 0)
-  #define SERVO_WRITE(ch, us)  (void)BSP_Servo_SetPulseUs((ch), (us))
-#else
-  #define SERVO_WRITE(ch, us)  (void)BSP_PWM_SetPulseUs((ch), (us))
-#endif
 
 /* ---------------------------------------------------------------------------
  * DMA 缓冲区必须放在 AXI SRAM（0x2400_0000）：
@@ -189,10 +177,22 @@ void servo_control(void)
 {
   float    pan_deg;
   float    tilt_deg;
+  float    pan_lo;
+  float    pan_hi;
+  float    tilt_lo;
+  float    tilt_hi;
+  float    pan_half;
+  float    tilt_half;
   uint16_t us_pan;
   uint16_t us_tilt;
 
-  /* 按下摇杆帽：立即回中 */
+  servo_calc_limit(SERVO_PAN_CENTER_DEG,  SERVO_PAN_HALF_DEG,  &pan_lo,  &pan_hi);
+  servo_calc_limit(SERVO_TILT_CENTER_DEG, SERVO_TILT_HALF_DEG, &tilt_lo, &tilt_hi);
+
+  pan_half  = (pan_hi  - pan_lo)  * 0.5f;
+  tilt_half = (tilt_hi - tilt_lo) * 0.5f;
+
+  /* 按下摇杆帽：立即回到机械中位 */
   if (g_joy_key != 0U)
   {
     g_joy_key = 0U;
@@ -200,24 +200,20 @@ void servo_control(void)
     s_fy = 0.0f;
     g_stick_x = 0;
     g_stick_y = 0;
-    servo_apply(JOY_PAN_CH,  angle_to_pulse(90.0f));
-    servo_apply(JOY_TILT_CH, angle_to_pulse(90.0f));
+    servo_apply(JOY_PAN_CH,  angle_to_pulse(SERVO_PAN_CENTER_DEG));
+    servo_apply(JOY_TILT_CH, angle_to_pulse(SERVO_TILT_CENTER_DEG));
     return;
   }
 
-  /* 控制量(-100~100) -> 角度：行程由 SERVO_xxx_MIN/MAX_DEG 决定，再叠加微调 */
-  pan_deg  = 0.5f * (SERVO_PAN_MAX_DEG  + SERVO_PAN_MIN_DEG) +
-             (float)g_stick_x * (0.5f * (SERVO_PAN_MAX_DEG  - SERVO_PAN_MIN_DEG) / 100.0f) +
-             SERVO_PAN_TRIM_DEG;
-  tilt_deg = 0.5f * (SERVO_TILT_MAX_DEG + SERVO_TILT_MIN_DEG) +
-             (float)g_stick_y * (0.5f * (SERVO_TILT_MAX_DEG - SERVO_TILT_MIN_DEG) / 100.0f) +
-             SERVO_TILT_TRIM_DEG;
+  /* 控制量(-100~100) -> 以机械中位为中心、左右对称的角度 */
+  pan_deg  = SERVO_PAN_CENTER_DEG  + (float)g_stick_x * pan_half  / 100.0f;
+  tilt_deg = SERVO_TILT_CENTER_DEG + (float)g_stick_y * tilt_half / 100.0f;
 
-  /* 机械限位 */
-  if (pan_deg < SERVO_PAN_MIN_DEG)   pan_deg = SERVO_PAN_MIN_DEG;
-  if (pan_deg > SERVO_PAN_MAX_DEG)   pan_deg = SERVO_PAN_MAX_DEG;
-  if (tilt_deg < SERVO_TILT_MIN_DEG) tilt_deg = SERVO_TILT_MIN_DEG;
-  if (tilt_deg > SERVO_TILT_MAX_DEG) tilt_deg = SERVO_TILT_MAX_DEG;
+  /* 机械限位（对称限位，正常不会触发，兜底用） */
+  if (pan_deg < pan_lo)    pan_deg = pan_lo;
+  if (pan_deg > pan_hi)    pan_deg = pan_hi;
+  if (tilt_deg < tilt_lo)  tilt_deg = tilt_lo;
+  if (tilt_deg > tilt_hi)  tilt_deg = tilt_hi;
 
   /* ----------------------------------------------------------------------
    * 【摄像头到货后的升级点】
