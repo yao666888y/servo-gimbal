@@ -33,6 +33,7 @@ static volatile uint16_t s_adc_dma[2];
 static uint8_t s_started = 0U;
 static uint8_t s_sw_last = 1U;
 static uint8_t s_joy_valid = 0U;           /* 上电后检测到摇杆才置 1 */
+static uint16_t s_press_ms = 0U;           /* SW 按下持续时间 */
 static uint16_t s_last_us[2] = {0U, 0U};   /* 上次写出的脉宽，避免重复写 */
 
 /* 一阶低通状态 */
@@ -45,6 +46,7 @@ volatile int16_t  g_stick_x = 0;
 volatile int16_t  g_stick_y = 0;
 volatile uint16_t g_joy_raw[2] = {JOY_ADC_CENTER, JOY_ADC_CENTER};
 volatile uint8_t  g_joy_key = 0U;
+volatile uint8_t  g_joy_long = 0U;
 
 /* -------------------------------------------------------------------------- */
 void Joystick_Init(void)
@@ -148,6 +150,20 @@ void key_scan(void)
 
   g_joy_key = ((s_sw_last == 1U) && (now == 0U)) ? 1U : 0U;   /* 下降沿 */
   s_sw_last = now;
+
+  /* 长按检测（key_scan 每 20ms 调一次） */
+  if (now == 0U)
+  {
+    if (s_press_ms < 0xFFFFU) s_press_ms += 20U;
+    if ((s_press_ms == 800U) && (g_joy_long == 0U))
+    {
+      g_joy_long = 1U;      /* 800ms 触发一次 */
+    }
+  }
+  else
+  {
+    s_press_ms = 0U;
+  }
 }
 
 /* -------------------------------------------------------------------------- */

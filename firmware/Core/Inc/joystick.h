@@ -58,6 +58,9 @@ extern volatile uint16_t g_joy_raw[2];
 /* 本周期检测到 SW 按下（下降沿），由 servo_control 消费 */
 extern volatile uint8_t  g_joy_key;
 
+/* 长按（>800ms）事件：主循环用它切换 摇杆/跟踪 模式 */
+extern volatile uint8_t  g_joy_long;
+
 void Joystick_Init(void);   /* 启动 ADC + DMA 连续转换 */
 void joystick_read(void);   /* 读 DMA 缓冲 -> 映射 -> 死区 -> 滤波 */
 void key_scan(void);        /* 扫描 SW 下降沿 */

@@ -20,6 +20,7 @@
 #include "bsp_power.h"
 #include "bsp_pwm.h"      /* TIM2 双路舵机 PWM */
 #include "joystick.h"     /* 摇杆 + SW 按键 */
+#include "track.h"        /* PID 视觉跟踪 */
 
 I2C_HandleTypeDef  hi2c2;
 UART_HandleTypeDef huart1;
@@ -89,6 +90,7 @@ int main(void)
 #endif
 
   Joystick_Init();         /* 启动 ADC 连续转换 + 循环 DMA */
+  Track_Init();            /* PID + 虚拟目标跟踪 */
 
   last_ctrl = HAL_GetTick();
   last_led  = HAL_GetTick();
@@ -103,8 +105,23 @@ int main(void)
       last_ctrl = now;
 
       joystick_read();     /* ADC -> -100~100，死区 + 滤波 */
-      key_scan();          /* SW 下降沿 */
-      servo_control();     /* -100~100 -> 0~180° -> 脉宽 -> CCR，含回中 */
+      key_scan();          /* SW 下降沿 + 长按 */
+
+      /* 长按摇杆帽：切换 摇杆手动 / 虚拟目标跟踪 */
+      if (g_joy_long != 0U)
+      {
+        g_joy_long = 0U;
+        Track_ToggleMode();
+      }
+
+      if (g_track_mode == TRACK_MODE_SIM)
+      {
+        Track_Update();    /* PID 闭环：虚拟目标 -> 误差 -> 角度 */
+      }
+      else
+      {
+        servo_control();   /* 手动：-100~100 -> 角度 -> 脉宽，含回中 */
+      }
     }
 
     /* 心跳灯 1Hz */
