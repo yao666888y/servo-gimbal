@@ -124,10 +124,12 @@ def list_cameras(max_idx: int = 6) -> None:
 
 # ---------------------------------------------------------------- 颜色检测
 class ColorTracker:
-    def __init__(self, h_min=35, h_max=85, s_min=80, v_min=60, s_max=255, v_max=255):
+    def __init__(self, h_min=35, h_max=85, s_min=80, v_min=60, s_max=255, v_max=255,
+                 min_area=300):
         self.h_min, self.h_max = h_min, h_max
         self.s_min, self.v_min = s_min, v_min
         self.s_max, self.v_max = s_max, v_max
+        self.min_area = min_area
 
     def make_trackbars(self, win: str) -> None:
         import cv2
@@ -162,7 +164,7 @@ class ColorTracker:
             return None, mask
 
         c = max(contours, key=cv2.contourArea)
-        if cv2.contourArea(c) < 300:          # 太小的噪点丢弃
+        if cv2.contourArea(c) < self.min_area:      # 太小的噪点丢弃
             return None, mask
 
         (x, y), radius = cv2.minEnclosingCircle(c)
@@ -182,6 +184,9 @@ def main() -> int:
     ap.add_argument("--height", default=480, type=int)
     ap.add_argument("--fps", default=30, type=int, help="发送频率")
     ap.add_argument("--duration", default=0, type=float, help="运行秒数，0=一直跑")
+    ap.add_argument("--min-area", default=300, type=float, help="最小目标面积(像素)，小于此值视为噪点")
+    ap.add_argument("--invert-x", action="store_true", help="水平方向反了就用这个")
+    ap.add_argument("--invert-y", action="store_true", help="垂直方向反了就用这个")
     ap.add_argument("--list", action="store_true", help="只列出摄像头")
     args = ap.parse_args()
 
@@ -211,7 +216,7 @@ def main() -> int:
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         print(f"摄像头 {args.cam} 分辨率 {w}x{h} (后端 {backend})")
-        tracker = ColorTracker()
+        tracker = ColorTracker(min_area=args.min_area)
         cv2.namedWindow(win)
         tracker.make_trackbars(win)
         cx_ref, cy_ref = w // 2, h // 2
@@ -258,6 +263,10 @@ def main() -> int:
                 else:
                     cx, cy = target
                     dx, dy = cx - cx_ref, cy - cy_ref
+                    if args.invert_x:
+                        dx = -dx
+                    if args.invert_y:
+                        dy = -dy
                     ser.write(build_target(dx, dy, True))
                     sent += 1
 
@@ -265,6 +274,9 @@ def main() -> int:
                     cv2.line(frame, (cx_ref, cy_ref), (cx, cy), (0, 255, 255), 1)
                     cv2.putText(frame, f"dx={dx:+4d} dy={dy:+4d}", (10, 30),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+                cv2.putText(frame, f"sent {sent}  lost {lost}", (10, h - 12),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
 
                 cv2.line(frame, (cx_ref - 15, cy_ref), (cx_ref + 15, cy_ref), (255, 255, 255), 1)
                 cv2.line(frame, (cx_ref, cy_ref - 15), (cx_ref, cy_ref + 15), (255, 255, 255), 1)
