@@ -115,13 +115,13 @@ int main(void)
         Track_ToggleMode();
       }
 
-      if (g_track_mode == TRACK_MODE_SIM)
+      if (g_track_mode == TRACK_MODE_JOY)
       {
-        Track_Update();    /* PID 闭环：虚拟目标 -> 误差 -> 角度 */
+        servo_control();   /* 手动：-100~100 -> 角度 -> 脉宽，含回中 */
       }
       else
       {
-        servo_control();   /* 手动：-100~100 -> 角度 -> 脉宽，含回中 */
+        Track_Update();    /* SIM 虚拟目标 / CAM 上位机视觉：PID 闭环 */
       }
     }
 

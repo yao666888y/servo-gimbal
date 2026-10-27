@@ -2,6 +2,30 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "▶ 视觉跟踪：cam1 + X轴反相（方向反就用这个）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/vision_tracker.py",
+      "args": ["--port", "COM7", "--cam", "1", "--mode", "color", "--invert-x"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "python": "D:\\anaconda3\\envs\\vision_servo\\python.exe",
+      "env": { "PYTHONIOENCODING": "utf-8" },
+      "justMyCode": true
+    },
+    {
+      "name": "视觉跟踪：cam1 + X/Y 都反相（画面上下颠倒时用）",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/tools/vision_tracker.py",
+      "args": ["--port", "COM7", "--cam", "1", "--mode", "color", "--invert-x", "--invert-y"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "python": "D:\\anaconda3\\envs\\vision_servo\\python.exe",
+      "env": { "PYTHONIOENCODING": "utf-8" },
+      "justMyCode": true
+    },
+    {
       "name": "视觉跟踪：真实摄像头 (cam1)",
       "type": "debugpy",
       "request": "launch",
