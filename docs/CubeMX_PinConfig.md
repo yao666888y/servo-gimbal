@@ -3,7 +3,9 @@
 > 配套文件：[PROJECT_RULES.md](../PROJECT_RULES.md) · [pinmap.csv](pinmap.csv)
 > 器件：**STM32H743VIT6 / LQFP100**（当前）；ZIT6 / LQFP144 引脚完全兼容，本表通用于两者 · 工具：STM32CubeMX 6.x + HAL
 > **舵机驱动：PCA9685 I2C 16 路驱动板**（TIM2 直驱方案转为备选）
-> **分阶段**：Phase 1（当前，**无摄像头**）= 舵机 + 串口 + 50Hz 节拍；Phase 2（摄像头到位）= DCMI / SCCB / XCLK / 控制脚，纯增量追加
+> **⚠️ 架构变更（2026-10）**：摄像头确定为 **HBVCAM 双目 USB 摄像头接 PC**，
+> 视觉在 PC 端用 OpenCV 处理、串口发坐标。**下方 §1.4 DCMI / §1.5 SCCB / §1.7 摄像头控制脚全部作废，不要接**。
+> 实际使用：I2C2（PCA9685）、USART1（PC 通信）、ADC1（摇杆）、GPIO。
 > 本文所有 AF 编号按 STM32H743 数据手册复用功能表；摄像头 8-bit 映射与实板
 > [WeAct MiniSTM32H7xx + OV2640 屏蔽板](https://docs.zephyrproject.org/4.2.1/boards/shields/weact_ov2640_cam_module/doc/) 交叉校验一致。
 

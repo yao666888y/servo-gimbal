@@ -49,11 +49,13 @@
 
 ## 4. 视觉与通信
 
-两种架构，按用户选择实现：
-- **A. 板载视觉**：DCMI + OV5640/OV2640，DMA 搬运，注意 D-Cache 一致性（见 §5）。
-- **B. 上位机 OpenCV**：UART/USB 虚拟串口传输目标坐标，STM32 侧做协议解析 + 控制。
+**最终选型（已确认）**：**HBVCAM-4M2214HD-2 双目 USB 摄像头接 PC**，PC 端 OpenCV 检测目标，
+通过 UART 把像素误差发给 STM32。DCMI 板载方案作废（不占用那 15 个引脚）。
 
-**Phase 1（当前无摄像头）**：PC 端做「模拟目标发生器」，按同一套协议注入像素坐标；STM32 侧协议解析、PID、舵机链路全部可先闭环验证，摄像头到货后只替换误差源，其余代码不动。
+- PC 端：[tools/vision_tracker.py](tools/vision_tracker.py)（OpenCV + pyserial）
+- STM32 端：`vision_link.c` 收帧 → `track.c` 的 PID → PCA9685
+
+（摄像头已在手，Phase 1 的虚拟目标发生器保留作为无相机时的自检手段。）
 
 串口协议规范：
 - 二进制、小端；帧格式 `0xAA 0x55 | len | cmd | payload | CRC16`。

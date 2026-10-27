@@ -15,12 +15,12 @@
   ******************************************************************************
   */
 #include "main.h"
-#include "app.h"          /* 保留：串口协议（当前未启用） */
 #include "bsp_servo.h"    /* 保留：PCA9685 驱动（当前未启用） */
 #include "bsp_power.h"
 #include "bsp_pwm.h"      /* TIM2 双路舵机 PWM */
 #include "joystick.h"     /* 摇杆 + SW 按键 */
 #include "track.h"        /* PID 视觉跟踪 */
+#include "vision_link.h"  /* 上位机视觉链路（USART1） */
 
 I2C_HandleTypeDef  hi2c2;
 UART_HandleTypeDef huart1;
@@ -91,6 +91,7 @@ int main(void)
 
   Joystick_Init();         /* 启动 ADC 连续转换 + 循环 DMA */
   Track_Init();            /* PID + 虚拟目标跟踪 */
+  Vision_Init();           /* 上位机视觉链路（USART1 RX） */
 
   last_ctrl = HAL_GetTick();
   last_led  = HAL_GetTick();

@@ -31,6 +31,7 @@ extern "C" {
 
 #define TRACK_MODE_JOY   0U   /* 摇杆手动 */
 #define TRACK_MODE_SIM   1U   /* 虚拟目标 + PID 闭环 */
+#define TRACK_MODE_CAM   2U   /* 上位机视觉（串口注入误差） */
 
 /* 当前工作模式（长按摇杆帽切换） */
 extern volatile uint8_t g_track_mode;
@@ -43,8 +44,10 @@ void Track_Init(void);
 void Track_Update(void);        /* 50Hz 调用 */
 void Track_ToggleMode(void);    /* 摇杆手动 <-> 虚拟目标跟踪 */
 
-/* 供摄像头模块调用：注入本帧像素误差（相对画面中心） */
+/* 供摄像头模块调用：注入本帧像素误差（相对画面中心），并切到 CAM 模式 */
 void Track_InjectError(float ex_px, float ey_px);
+void Track_SetTarget(float ex_px, float ey_px);
+uint8_t Track_GetMode(void);
 
 #ifdef __cplusplus
 }

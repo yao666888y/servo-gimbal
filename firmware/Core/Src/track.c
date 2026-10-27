@@ -27,9 +27,12 @@ static float s_pan_hi  = 180.0f;
 static float s_tilt_lo = 0.0f;
 static float s_tilt_hi = 180.0f;
 
-/* 摄像头注入的误差（TRACK_MODE_SIM 时不使用） */
+/* 摄像头注入的误差（TRACK_MODE_CAM 时使用） */
 static volatile float s_inject_ex = 0.0f;
 static volatile float s_inject_ey = 0.0f;
+static volatile uint32_t s_target_ms = 0U;
+
+#define CAM_TIMEOUT_MS  300U     /* 超过这么久没收到目标 -> 冻结云台 */
 
 /* -------------------------------------------------------------------------- */
 void Track_Init(void)
@@ -74,6 +77,25 @@ void Track_InjectError(float ex_px, float ey_px)
 {
   s_inject_ex = ex_px;
   s_inject_ey = ey_px;
+  s_target_ms = HAL_GetTick();
+}
+
+/* 上位机视觉链路调用：注入一帧目标误差，并自动切到摄像头模式 */
+void Track_SetTarget(float ex_px, float ey_px)
+{
+  Track_InjectError(ex_px, ey_px);
+
+  if (g_track_mode != TRACK_MODE_CAM)
+  {
+    g_track_mode = TRACK_MODE_CAM;
+    PID_Reset(&s_pid_pan);
+    PID_Reset(&s_pid_tilt);
+  }
+}
+
+uint8_t Track_GetMode(void)
+{
+  return g_track_mode;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -82,25 +104,36 @@ void Track_Update(void)
   float ex;
   float ey;
 
-  if (g_track_mode != TRACK_MODE_SIM)
+  if (g_track_mode == TRACK_MODE_CAM)
+  {
+    /* 目标丢失保护：超时就不动了，停在原位等目标回来 */
+    if ((HAL_GetTick() - s_target_ms) > CAM_TIMEOUT_MS)
+    {
+      return;
+    }
+    ex = s_inject_ex;
+    ey = s_inject_ey;
+  }
+  else if (g_track_mode == TRACK_MODE_SIM)
+  {
+    s_sim_t += SIM_DT_S;
+
+    /* ---- 虚拟目标：在 640x480 画面里做两个不同频率的正弦运动 ---- */
+    {
+      float tx = (float)(FRAME_W / 2) + 220.0f * sinf(2.0f * PI_F * 0.15f * s_sim_t);
+      float ty = (float)(FRAME_H / 2) + 150.0f * sinf(2.0f * PI_F * 0.11f * s_sim_t);
+
+      /* 模拟"摄像机": 云台向右转，目标在画面里向左移 */
+      float measured_x = tx - K_DEG2PX * (g_pan_deg  - SERVO_PAN_CENTER_DEG);
+      float measured_y = ty - K_DEG2PX * (g_tilt_deg - SERVO_TILT_CENTER_DEG);
+
+      ex = measured_x - (float)(FRAME_W / 2);
+      ey = measured_y - (float)(FRAME_H / 2);
+    }
+  }
+  else
   {
     return;   /* 摇杆模式由 joystick.c 的 servo_control() 负责 */
-  }
-
-  s_sim_t += SIM_DT_S;
-
-  /* ---- 虚拟目标：在 640x480 画面里做两个不同频率的正弦运动 ----
-     接上摄像头后，这一段整体删掉，改用 Track_InjectError() 的实测误差 */
-  {
-    float tx = (float)(FRAME_W / 2) + 220.0f * sinf(2.0f * PI_F * 0.15f * s_sim_t);
-    float ty = (float)(FRAME_H / 2) + 150.0f * sinf(2.0f * PI_F * 0.11f * s_sim_t);
-
-    /* 模拟"摄像机": 云台向右转，目标在画面里向左移 */
-    float measured_x = tx - K_DEG2PX * (g_pan_deg  - SERVO_PAN_CENTER_DEG);
-    float measured_y = ty - K_DEG2PX * (g_tilt_deg - SERVO_TILT_CENTER_DEG);
-
-    ex = measured_x - (float)(FRAME_W / 2);
-    ey = measured_y - (float)(FRAME_H / 2);
   }
 
   /* 误差 -> 角度增量 -> 以机械中位为中心的绝对角度 */
