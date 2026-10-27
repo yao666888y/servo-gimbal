@@ -70,3 +70,9 @@ void USART1_IRQHandler(void)
 {
   HAL_UART_IRQHandler(&huart1);
 }
+
+/* 摇杆 ADC 的循环 DMA（半满/全满/错误） */
+void DMA1_Stream0_IRQHandler(void)
+{
+  HAL_DMA_IRQHandler(&hdma_adc1);
+}

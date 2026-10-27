@@ -32,11 +32,17 @@ extern "C" {
 #define VBUS_ADC_Pin          GPIO_PIN_0
 #define VBUS_ADC_GPIO_Port    GPIOC
 
+/* 摇杆 SW（内部上拉，按下为低） */
+#define JOY_SW_Pin            GPIO_PIN_1
+#define JOY_SW_GPIO_Port      GPIOB
+
 /* 全局外设句柄 ------------------------------------------------------------*/
 extern I2C_HandleTypeDef  hi2c2;
 extern UART_HandleTypeDef huart1;
 extern TIM_HandleTypeDef  htim6;
+extern TIM_HandleTypeDef  htim2;
 extern ADC_HandleTypeDef  hadc1;
+extern DMA_HandleTypeDef  hdma_adc1;
 
 /* 公共函数 ----------------------------------------------------------------*/
 void Error_Handler(void);

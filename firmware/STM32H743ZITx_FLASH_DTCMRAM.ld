@@ -47,7 +47,8 @@ MEMORY
 {
   ITCMRAM    (xrw)    : ORIGIN = 0x00000000,   LENGTH = 64K
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 128K
-  ROM    (rx)    : ORIGIN = 0x08000000,   LENGTH = 2048K
+  RAM_D1 (xrw)    : ORIGIN = 0x24000000,   LENGTH = 512K   /* AXI SRAM：DMA 可访问 */
+  ROM    (rx)     : ORIGIN = 0x08000000,   LENGTH = 2048K
 }
 
 /* Sections */
@@ -165,6 +166,16 @@ SECTIONS
     _ebss = .;         /* define a global symbol at bss end */
     __bss_end__ = _ebss;
   } >RAM
+
+  /* DMA 缓冲区：必须放在 AXI SRAM（DTCM 不被 DMA1/DMA2 访问）
+     MPU Region 0 已把该区域配成 Non-Cacheable */
+  .axi_sram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.axi_sram)
+    *(.axi_sram*)
+    . = ALIGN(32);
+  } >RAM_D1
 
   /* User_heap_stack section, used to check that there is enough "RAM" Ram  type memory left */
   ._user_heap_stack :

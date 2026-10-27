@@ -15,14 +15,18 @@
   ******************************************************************************
   */
 #include "main.h"
-#include "app.h"
-#include "bsp_servo.h"
+#include "app.h"          /* 保留：串口协议（当前未启用） */
+#include "bsp_servo.h"    /* 保留：PCA9685 驱动（当前未启用） */
 #include "bsp_power.h"
+#include "bsp_pwm.h"      /* TIM2 双路舵机 PWM */
+#include "joystick.h"     /* 摇杆 + SW 按键 */
 
 I2C_HandleTypeDef  hi2c2;
 UART_HandleTypeDef huart1;
 TIM_HandleTypeDef  htim6;
+TIM_HandleTypeDef  htim2;
 ADC_HandleTypeDef  hadc1;
+DMA_HandleTypeDef  hdma_adc1;
 
 static void MPU_Config(void);
 static void SystemClock_Config(void);
@@ -30,10 +34,28 @@ static void MX_GPIO_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM6_Init(void);
+static void MX_TIM2_Init(void);
 static void MX_ADC1_Init(void);
 
+/**
+  * @brief  摇杆手动控制演示
+  *
+  * 硬件接线：
+  *   舵机 Pan  信号 -> PA0 (TIM2_CH1)    舵机电源 -> 独立 6~7.4V，GND 共地
+  *   舵机 Tilt 信号 -> PA1 (TIM2_CH2)
+  *   摇杆 URX -> PA2 (ADC1_INP14)        摇杆 VCC -> 3.3V
+  *   摇杆 URY -> PA3 (ADC1_INP15)        摇杆 GND -> GND
+  *   摇杆 SW  -> PB1 (内部上拉，按下为低)
+  *
+  * 控制链路（50Hz）：
+  *   ADC DMA -> joystick_read() 映射/死区/滤波 -> key_scan() -> servo_control()
+  */
 int main(void)
 {
+  uint32_t now;
+  uint32_t last_ctrl;
+  uint32_t last_led;
+
   HAL_Init();
 
   MPU_Config();
@@ -44,20 +66,41 @@ int main(void)
 
   SystemClock_Config();
 
-  MX_GPIO_Init();
-  MX_I2C2_Init();
+  MX_GPIO_Init();          /* LED / SW 按键 / PCA9685 OE */
+  MX_TIM2_Init();          /* PA0/PA1 50Hz PWM */
+  MX_ADC1_Init();          /* PA2/PA3 双通道 + DMA */
+
+  /* 串口保留：需要调试输出时可以直接用 huart1 */
   MX_USART1_UART_Init();
-  MX_TIM6_Init();
-  MX_ADC1_Init();
+  MX_I2C2_Init();          /* 保留：PCA9685 路径，当前不使用 */
+  MX_TIM6_Init();          /* 保留：50Hz 节拍源，这里不启动（主循环用 SysTick） */
 
-  (void)BSP_Servo_Init();
-  App_Init();
+  BSP_PWM_Init();          /* 两路先输出 1500us 中位 */
+  Joystick_Init();         /* 启动 ADC 连续转换 + 循环 DMA */
 
-  (void)HAL_TIM_Base_Start_IT(&htim6);
+  last_ctrl = HAL_GetTick();
+  last_led  = HAL_GetTick();
 
   while (1)
   {
-    App_Loop();
+    now = HAL_GetTick();
+
+    /* 50Hz 控制节拍（20ms） */
+    if ((now - last_ctrl) >= 20U)
+    {
+      last_ctrl = now;
+
+      joystick_read();     /* ADC -> -100~100，死区 + 滤波 */
+      key_scan();          /* SW 下降沿 */
+      servo_control();     /* -100~100 -> 0~180° -> 脉宽 -> CCR，含回中 */
+    }
+
+    /* 心跳灯 1Hz */
+    if ((now - last_led) >= 500U)
+    {
+      last_led = now;
+      HAL_GPIO_TogglePin(LED_RUN_GPIO_Port, LED_RUN_Pin);
+    }
   }
 }
 
@@ -155,13 +198,20 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LED_RUN_GPIO_Port, &GPIO_InitStruct);
 
-  /* PD6: SERVO_OE，初始高 = 输出关断 */
+  /* PD6: SERVO_OE，初始高 = 输出关断
+     （TIM2 直驱时不用 PCA9685 输出；保持关断可避免两路信号打架） */
   HAL_GPIO_WritePin(SERVO_OE_GPIO_Port, SERVO_OE_Pin, GPIO_PIN_SET);
   GPIO_InitStruct.Pin   = SERVO_OE_Pin;
   GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull  = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SERVO_OE_GPIO_Port, &GPIO_InitStruct);
+
+  /* PB1: 摇杆 SW，内部上拉，按下读到低电平 */
+  GPIO_InitStruct.Pin  = JOY_SW_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(JOY_SW_GPIO_Port, &GPIO_InitStruct);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -220,24 +270,58 @@ static void MX_TIM6_Init(void)
 }
 
 /* -------------------------------------------------------------------------- */
-/* ADC1_INP10 (PC0)：V+ 母线分压采样，16bit 单次软件触发 */
+/* TIM2 CH1/CH2：50Hz 舵机 PWM
+   TIM2 内核 240MHz -> PSC=239 得 1MHz（1 计数 = 1us）
+   ARR=19999 -> 20ms；CCR 500~2500 -> 0.5~2.5ms */
+static void MX_TIM2_Init(void)
+{
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  htim2.Instance               = TIM2;
+  htim2.Init.Prescaler         = 239U;
+  htim2.Init.CounterMode       = TIM_COUNTERMODE_UP;
+  htim2.Init.Period            = 19999U;
+  htim2.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  sConfigOC.OCMode     = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse      = SERVO_PULSE_MID_US;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* ADC1 双通道扫描 + 循环 DMA：PA2(INP14)=URX，PA3(INP15)=URY */
 static void MX_ADC1_Init(void)
 {
   ADC_ChannelConfTypeDef sConfig = {0};
 
   hadc1.Instance                      = ADC1;
   hadc1.Init.ClockPrescaler           = ADC_CLOCK_SYNC_PCLK_DIV4;  /* 120/4 = 30MHz */
-  hadc1.Init.Resolution               = ADC_RESOLUTION_16B;
-  hadc1.Init.ScanConvMode             = ADC_SCAN_DISABLE;
-  hadc1.Init.EOCSelection             = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.Resolution               = ADC_RESOLUTION_12B;        /* 0~4095 */
+  hadc1.Init.ScanConvMode             = ADC_SCAN_ENABLE;
+  hadc1.Init.EOCSelection             = ADC_EOC_SEQ_CONV;
   hadc1.Init.LowPowerAutoWait         = DISABLE;
-  hadc1.Init.ContinuousConvMode       = DISABLE;
-  hadc1.Init.NbrOfConversion          = 1U;
+  hadc1.Init.ContinuousConvMode       = ENABLE;                    /* 连续转换 */
+  hadc1.Init.NbrOfConversion          = 2U;
   hadc1.Init.DiscontinuousConvMode    = DISABLE;
   hadc1.Init.NbrOfDiscConversion      = 0U;
   hadc1.Init.ExternalTrigConv         = ADC_SOFTWARE_START;
   hadc1.Init.ExternalTrigConvEdge     = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc1.Init.ConversionDataManagement = ADC_CONVERSIONDATA_DR;
+  hadc1.Init.ConversionDataManagement = ADC_CONVERSIONDATA_DMA_CIRCULAR;
   hadc1.Init.Overrun                  = ADC_OVR_DATA_OVERWRITTEN;
   hadc1.Init.LeftBitShift             = ADC_LEFTBITSHIFT_NONE;
   hadc1.Init.OversamplingMode         = DISABLE;
@@ -246,13 +330,21 @@ static void MX_ADC1_Init(void)
     Error_Handler();
   }
 
-  sConfig.Channel                = ADC_CHANNEL_10;
-  sConfig.Rank                   = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime           = ADC_SAMPLETIME_810CYCLES_5;   /* 高阻分压，长采样 */
+  sConfig.SamplingTime           = ADC_SAMPLETIME_810CYCLES_5;   /* 摇杆是 10k 电位器，长采样 */
   sConfig.SingleDiff             = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber           = ADC_OFFSET_NONE;
   sConfig.Offset                 = 0U;
   sConfig.OffsetSignedSaturation = DISABLE;
+
+  sConfig.Channel = ADC_CHANNEL_14;              /* PA2 = URX */
+  sConfig.Rank    = ADC_REGULAR_RANK_1;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  sConfig.Channel = ADC_CHANNEL_15;              /* PA3 = URY */
+  sConfig.Rank    = ADC_REGULAR_RANK_2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
