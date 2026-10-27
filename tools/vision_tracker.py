@@ -58,25 +58,40 @@ def build_target(dx: int, dy: int, valid: bool) -> bytes:
 
 
 # ---------------------------------------------------------------- 摄像头枚举
-def list_cameras(max_idx: int = 6) -> None:
-    try:
-        import cv2
-    except ImportError:
-        print("需要 opencv：pip install opencv-python")
-        return
-    print("探测摄像头序号（每个会尝试打开并读一帧）...")
-    for i in range(max_idx):
-        cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
+def open_capture(idx: int, width: int = None, height: int = None):
+    """依次尝试 DSHOW / MSMF / 默认后端打开摄像头，返回可用的 VideoCapture 或 None"""
+    import cv2
+
+    for name, backend in (("DSHOW", cv2.CAP_DSHOW), ("MSMF", cv2.CAP_MSMF), ("ANY", cv2.CAP_ANY)):
+        cap = cv2.VideoCapture(idx, backend)
         if not cap.isOpened():
             cap.release()
             continue
+        if width:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        if height:
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         ok, frame = cap.read()
-        cap.release()
         if ok and frame is not None:
-            h, w = frame.shape[:2]
-            print(f"  序号 {i}: {w}x{h}  可用")
-        else:
-            print(f"  序号 {i}: 能打开但读不到画面")
+            return cap, name
+        cap.release()
+    return None, None
+
+
+def list_cameras(max_idx: int = 6) -> None:
+    print("探测摄像头序号（每个会尝试打开并读一帧）...")
+    found = False
+    for i in range(max_idx):
+        cap, backend = open_capture(i)
+        if cap is None:
+            continue
+        ok, frame = cap.read()
+        h, w = frame.shape[:2] if ok else (0, 0)
+        cap.release()
+        print(f"  序号 {i}: {w}x{h}  (后端 {backend})")
+        found = True
+    if not found:
+        print("  没找到可用摄像头。检查：USB 是否插好、是否被其他程序占用、驱动是否正常。")
 
 
 # ---------------------------------------------------------------- 颜色检测
@@ -161,15 +176,13 @@ def main() -> int:
 
     if args.mode == "color":
         import cv2
-        cap = cv2.VideoCapture(args.cam, cv2.CAP_DSHOW)
-        if not cap.isOpened():
+        cap, backend = open_capture(args.cam, args.width, args.height)
+        if cap is None:
             print(f"[错误] 打不开摄像头 {args.cam}，用 --list 看看有哪些序号")
             return 1
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        print(f"摄像头 {args.cam} 分辨率 {w}x{h}")
+        print(f"摄像头 {args.cam} 分辨率 {w}x{h} (后端 {backend})")
         tracker = ColorTracker()
         cv2.namedWindow(win)
         tracker.make_trackbars(win)
