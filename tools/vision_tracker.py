@@ -78,9 +78,31 @@ def open_capture(idx: int, width: int = None, height: int = None):
     return None, None
 
 
+def camera_device_names():
+    """列出系统里的摄像头设备名（Windows），方便分辨内置摄像头和 USB 双目相机"""
+    if sys.platform != "win32":
+        return []
+    try:
+        import subprocess
+        ps = ("Get-CimInstance Win32_PnPEntity | Where-Object { $_.PNPClass -eq 'Camera' -or "
+              "$_.PNPClass -eq 'Image' } | Select-Object -ExpandProperty Name")
+        out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                             capture_output=True, text=True, timeout=15)
+        return [ln.strip() for ln in out.stdout.splitlines() if ln.strip()]
+    except Exception:
+        return []
+
+
 def list_cameras(max_idx: int = 6) -> None:
-    print("探测摄像头序号（每个会尝试打开并读一帧）...")
-    found = False
+    names = camera_device_names()
+    if names:
+        print("系统中的摄像头设备：")
+        for n in names:
+            print(f"  - {n}")
+        print()
+
+    print("逐个尝试打开（序号 0 通常是笔记本内置摄像头）：")
+    found = []
     for i in range(max_idx):
         cap, backend = open_capture(i)
         if cap is None:
@@ -89,9 +111,15 @@ def list_cameras(max_idx: int = 6) -> None:
         h, w = frame.shape[:2] if ok else (0, 0)
         cap.release()
         print(f"  序号 {i}: {w}x{h}  (后端 {backend})")
-        found = True
+        found.append(i)
+
     if not found:
         print("  没找到可用摄像头。检查：USB 是否插好、是否被其他程序占用、驱动是否正常。")
+    else:
+        print()
+        print(f"可用序号：{found}")
+        print("双目相机如果只有一路图像，说明它是左右拼接输出；")
+        print("如果两个序号分别是 640x480，说明是左右两个独立设备，分别用 --cam 指定即可。")
 
 
 # ---------------------------------------------------------------- 颜色检测
@@ -209,6 +237,15 @@ def main() -> int:
                 ok, frame = cap.read()
                 if not ok:
                     continue
+
+                # 窗口被用户关掉就正常退出，别去读滑条（否则 cv2 会抛 NULL window）
+                try:
+                    if cv2.getWindowProperty(win, cv2.WND_PROP_VISIBLE) < 1:
+                        print("窗口已关闭，退出")
+                        break
+                except cv2.error:
+                    print("窗口已关闭，退出")
+                    break
 
                 tracker.read_trackbars(win)
                 target, mask = tracker.detect(frame)
