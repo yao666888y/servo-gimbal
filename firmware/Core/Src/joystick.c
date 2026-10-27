@@ -205,9 +205,19 @@ void servo_control(void)
     return;
   }
 
-  /* 控制量(-100~100) -> 角度(0~180, 90 为中位) + 机械中位微调 */
-  pan_deg  = 90.0f + (float)g_stick_x * 0.9f + SERVO_PAN_TRIM_DEG;
-  tilt_deg = 90.0f + (float)g_stick_y * 0.9f + SERVO_TILT_TRIM_DEG;
+  /* 控制量(-100~100) -> 角度：行程由 SERVO_xxx_MIN/MAX_DEG 决定，再叠加微调 */
+  pan_deg  = 0.5f * (SERVO_PAN_MAX_DEG  + SERVO_PAN_MIN_DEG) +
+             (float)g_stick_x * (0.5f * (SERVO_PAN_MAX_DEG  - SERVO_PAN_MIN_DEG) / 100.0f) +
+             SERVO_PAN_TRIM_DEG;
+  tilt_deg = 0.5f * (SERVO_TILT_MAX_DEG + SERVO_TILT_MIN_DEG) +
+             (float)g_stick_y * (0.5f * (SERVO_TILT_MAX_DEG - SERVO_TILT_MIN_DEG) / 100.0f) +
+             SERVO_TILT_TRIM_DEG;
+
+  /* 机械限位 */
+  if (pan_deg < SERVO_PAN_MIN_DEG)   pan_deg = SERVO_PAN_MIN_DEG;
+  if (pan_deg > SERVO_PAN_MAX_DEG)   pan_deg = SERVO_PAN_MAX_DEG;
+  if (tilt_deg < SERVO_TILT_MIN_DEG) tilt_deg = SERVO_TILT_MIN_DEG;
+  if (tilt_deg > SERVO_TILT_MAX_DEG) tilt_deg = SERVO_TILT_MAX_DEG;
 
   /* ----------------------------------------------------------------------
    * 【摄像头到货后的升级点】

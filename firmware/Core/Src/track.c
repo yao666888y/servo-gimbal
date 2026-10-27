@@ -28,10 +28,14 @@ static volatile float s_inject_ey = 0.0f;
 /* -------------------------------------------------------------------------- */
 void Track_Init(void)
 {
-  /* 增量式 PID：输出是"角度增量"，限幅即抗积分饱和
-     kp/ki 按 50Hz、6px/度 的环路增益整定，先保守一点 */
-  PID_Init(&s_pid_pan,  0.020f, 0.004f, 0.0f, -50.0f, 50.0f, 0.25f, 3.0f);
-  PID_Init(&s_pid_tilt, 0.020f, 0.004f, 0.0f, -40.0f, 40.0f, 0.25f, 3.0f);
+  /* 增量式 PID：输出是"角度增量"，限幅即抗积分饱和。
+     上下限直接由机械限位换算，这样改 joystick.h 一处就同时生效 */
+  PID_Init(&s_pid_pan,  0.020f, 0.004f, 0.0f,
+           SERVO_PAN_MIN_DEG  - 90.0f, SERVO_PAN_MAX_DEG  - 90.0f,
+           0.25f, 3.0f);
+  PID_Init(&s_pid_tilt, 0.020f, 0.004f, 0.0f,
+           SERVO_TILT_MIN_DEG - 90.0f, SERVO_TILT_MAX_DEG - 90.0f,
+           0.25f, 3.0f);
 
   g_pan_deg  = 90.0f;
   g_tilt_deg = 90.0f;
@@ -93,11 +97,11 @@ void Track_Update(void)
   g_pan_deg  = 90.0f + PID_Update(&s_pid_pan,  ex) + SERVO_PAN_TRIM_DEG;
   g_tilt_deg = 90.0f + PID_Update(&s_pid_tilt, -ey) + SERVO_TILT_TRIM_DEG;
 
-  /* 硬限位：任何情况下都不出 0~180° */
-  if (g_pan_deg < 0.0f)    g_pan_deg = 0.0f;
-  if (g_pan_deg > 180.0f)  g_pan_deg = 180.0f;
-  if (g_tilt_deg < 0.0f)   g_tilt_deg = 0.0f;
-  if (g_tilt_deg > 180.0f) g_tilt_deg = 180.0f;
+  /* 硬限位：任何情况下都不出机械范围 */
+  if (g_pan_deg < SERVO_PAN_MIN_DEG)   g_pan_deg = SERVO_PAN_MIN_DEG;
+  if (g_pan_deg > SERVO_PAN_MAX_DEG)   g_pan_deg = SERVO_PAN_MAX_DEG;
+  if (g_tilt_deg < SERVO_TILT_MIN_DEG) g_tilt_deg = SERVO_TILT_MIN_DEG;
+  if (g_tilt_deg > SERVO_TILT_MAX_DEG) g_tilt_deg = SERVO_TILT_MAX_DEG;
 
   SERVO_WRITE(0, servo_angle_to_pulse(g_pan_deg));
   SERVO_WRITE(1, servo_angle_to_pulse(g_tilt_deg));

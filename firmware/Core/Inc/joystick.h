@@ -50,8 +50,15 @@ extern "C" {
 
 /* 中位微调（度）：机械对零后仍有几度偏差时用，正数=往角度大的方向偏
    舵机臂通常 10~18°/齿，这里只做 ±15° 以内的细调 */
-#define SERVO_PAN_TRIM_DEG    0.0f
-#define SERVO_TILT_TRIM_DEG   0.0f
+#define SERVO_PAN_TRIM_DEG    +10.0f
+#define SERVO_TILT_TRIM_DEG   +10.0f
+
+/* 机械限位（度）：摇杆行程和 PID 输出都受这组值约束。
+   0/180 是舵机理论满行程，实际要按云台结构留 5~15° 余量避免撞框 */
+#define SERVO_PAN_MIN_DEG     0.0f
+#define SERVO_PAN_MAX_DEG     180.0f
+#define SERVO_TILT_MIN_DEG    0.0f
+#define SERVO_TILT_MAX_DEG    180.0f
 
 /* 输出：-100 ~ +100，已滤波、已过死区 */
 extern volatile int16_t  g_stick_x;
