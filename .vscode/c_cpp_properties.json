@@ -1,0 +1,27 @@
+{
+  "configurations": [
+    {
+      "name": "STM32H743",
+      "includePath": [
+        "${workspaceFolder}/firmware/Core/Inc",
+        "${workspaceFolder}/firmware/Drivers/STM32H7xx_HAL_Driver/Inc",
+        "${workspaceFolder}/firmware/Drivers/CMSIS/Device/ST/STM32H7xx/Include",
+        "${workspaceFolder}/firmware/Drivers/CMSIS/Include"
+      ],
+      "defines": [
+        "USE_HAL_DRIVER",
+        "STM32H743xx"
+      ],
+      "compilerPath": "D:/CLT/STM32CubeCLT_1.18.0/GNU-tools-for-STM32/bin/arm-none-eabi-gcc.exe",
+      "cStandard": "c11",
+      "intelliSenseMode": "gcc-arm",
+      "compilerArgs": [
+        "-mcpu=cortex-m7",
+        "-mthumb",
+        "-mfpu=fpv5-d16",
+        "-mfloat-abi=hard"
+      ]
+    }
+  ],
+  "version": 4
+}

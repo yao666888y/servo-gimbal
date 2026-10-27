@@ -1,0 +1,71 @@
+{
+  "version": "2.0.0",
+  "options": {
+    "cwd": "${workspaceFolder}/firmware"
+  },
+  "tasks": [
+    {
+      "label": "Build",
+      "detail": "编译生成 build/gimbal.elf / .hex / .bin",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/firmware/build.ps1"
+      ],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Flash (ST-Link)",
+      "detail": "只烧录，不重新编译",
+      "type": "shell",
+      "command": "D:/CLT/STM32CubeCLT_1.18.0/STM32CubeProgrammer/bin/STM32_Programmer_CLI.exe",
+      "args": [
+        "-c", "port=SWD",
+        "-w", "${workspaceFolder}/firmware/build/gimbal.hex",
+        "-v", "-rst"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Build + Flash",
+      "detail": "编译后立刻烧录并复位运行",
+      "dependsOn": ["Build"],
+      "dependsOrder": "sequence",
+      "type": "shell",
+      "command": "D:/CLT/STM32CubeCLT_1.18.0/STM32CubeProgrammer/bin/STM32_Programmer_CLI.exe",
+      "args": [
+        "-c", "port=SWD",
+        "-w", "${workspaceFolder}/firmware/build/gimbal.hex",
+        "-v", "-rst"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Erase chip",
+      "detail": "全片擦除（会清掉所有程序）",
+      "type": "shell",
+      "command": "D:/CLT/STM32CubeCLT_1.18.0/STM32CubeProgrammer/bin/STM32_Programmer_CLI.exe",
+      "args": ["-c", "port=SWD", "-e", "all"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Reset target",
+      "type": "shell",
+      "command": "D:/CLT/STM32CubeCLT_1.18.0/STM32CubeProgrammer/bin/STM32_Programmer_CLI.exe",
+      "args": ["-c", "port=SWD", "-rst"],
+      "problemMatcher": []
+    },
+    {
+      "label": "List probes",
+      "detail": "确认 ST-Link 是否被识别",
+      "type": "shell",
+      "command": "D:/CLT/STM32CubeCLT_1.18.0/STM32CubeProgrammer/bin/STM32_Programmer_CLI.exe",
+      "args": ["-l"],
+      "problemMatcher": []
+    }
+  ]
+}
