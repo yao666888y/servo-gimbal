@@ -205,9 +205,9 @@ void servo_control(void)
     return;
   }
 
-  /* 控制量(-100~100) -> 角度(0~180, 90 为中位) */
-  pan_deg  = 90.0f + (float)g_stick_x * 0.9f;
-  tilt_deg = 90.0f + (float)g_stick_y * 0.9f;
+  /* 控制量(-100~100) -> 角度(0~180, 90 为中位) + 机械中位微调 */
+  pan_deg  = 90.0f + (float)g_stick_x * 0.9f + SERVO_PAN_TRIM_DEG;
+  tilt_deg = 90.0f + (float)g_stick_y * 0.9f + SERVO_TILT_TRIM_DEG;
 
   /* ----------------------------------------------------------------------
    * 【摄像头到货后的升级点】

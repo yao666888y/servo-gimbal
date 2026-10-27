@@ -1,4 +1,4 @@
-﻿/**
+/**
   ******************************************************************************
   * @file    track.c
   * @brief   视觉跟踪闭环 + 虚拟目标验证
@@ -89,9 +89,9 @@ void Track_Update(void)
     ey = measured_y - (float)(FRAME_H / 2);
   }
 
-  /* 误差 -> 角度增量 -> 绝对角度 */
-  g_pan_deg  = 90.0f + PID_Update(&s_pid_pan,  ex);
-  g_tilt_deg = 90.0f + PID_Update(&s_pid_tilt, -ey);   /* 画面上方对应俯仰变大 */
+  /* 误差 -> 角度增量 -> 绝对角度（叠加机械中位微调） */
+  g_pan_deg  = 90.0f + PID_Update(&s_pid_pan,  ex) + SERVO_PAN_TRIM_DEG;
+  g_tilt_deg = 90.0f + PID_Update(&s_pid_tilt, -ey) + SERVO_TILT_TRIM_DEG;
 
   /* 硬限位：任何情况下都不出 0~180° */
   if (g_pan_deg < 0.0f)    g_pan_deg = 0.0f;

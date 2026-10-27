@@ -48,6 +48,11 @@ extern "C" {
 #define JOY_X_INVERT     0
 #define JOY_Y_INVERT     1
 
+/* 中位微调（度）：机械对零后仍有几度偏差时用，正数=往角度大的方向偏
+   舵机臂通常 10~18°/齿，这里只做 ±15° 以内的细调 */
+#define SERVO_PAN_TRIM_DEG    0.0f
+#define SERVO_TILT_TRIM_DEG   0.0f
+
 /* 输出：-100 ~ +100，已滤波、已过死区 */
 extern volatile int16_t  g_stick_x;
 extern volatile int16_t  g_stick_y;
